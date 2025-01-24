@@ -11,80 +11,92 @@
  */
 
 // Prevent direct access to the file
-if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly.
 }
 
-/**
- * Add the "File Size" column to the media library
- */
-function twg_add_file_size_column( $columns ) {
-    $columns['twg_file_size'] = __( 'File Size', 'twg-media-file-size-column' );
-    return $columns;
-}
-add_filter( 'manage_upload_columns', 'twg_add_file_size_column' );
+class TWGP_Media_File_Manager {
+    public function __construct() {
+        // Hook into WordPress actions and filters.
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_filter('manage_media_columns', array($this, 'add_file_size_column'));
+        add_action('manage_media_custom_column', array($this, 'display_file_size_column'), 10, 2);
+        add_action('wp_ajax_twgp_get_file_size', array($this, 'ajax_get_file_size'));
+    }
 
-/**
- * Display file size in the new column
- */
-function twg_display_file_size_column( $column_name, $post_id ) {
-    // Ensure we are dealing with the correct column
-    if ( 'twg_file_size' === $column_name ) {
-        // Only proceed if the user has the correct capability
-        if ( current_user_can( 'manage_options' ) ) {
-            $file_path = get_attached_file( $post_id );
-            
-            // Ensure the file exists before attempting to get the file size
-            if ( file_exists( $file_path ) ) {
-                $file_size = filesize( $file_path );
-                $file_size = size_format( $file_size, 1 );  // Format file size (KB, MB, GB)
-                echo esc_html( $file_size );
-            } else {
-                echo esc_html__( 'File not found', 'twg-media-file-size-column' );
-            }
-        } else {
-            echo esc_html__( 'Insufficient permissions', 'twg-media-file-size-column' );
+    /**
+     * Enqueue admin assets.
+     */
+    public function enqueue_admin_assets($hook) {
+        if ('upload.php' !== $hook) {
+            return;
+        }
+
+        // Enqueue CSS.
+        wp_enqueue_style(
+            'twgp-admin-css',
+            plugins_url('/assets/css/admin-style.css', __FILE__),
+            array(),
+            '1.0.0'
+        );
+
+        // Enqueue JavaScript.
+        wp_enqueue_script(
+            'twgp-admin-js',
+            plugins_url('/assets/js/admin-script.js', __FILE__),
+            array('jquery'),
+            '1.0.0',
+            true
+        );
+
+        // Localize script with nonce and AJAX URL.
+        wp_localize_script('twgp-admin-js', 'twgp_ajax_object', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'twgp_nonce' => wp_create_nonce('twgp_nonce_action')
+        ));
+    }
+
+    /**
+     * Add a new column for File Size.
+     */
+    public function add_file_size_column($columns) {
+        $columns['file_size'] = __('File Size', 'twgp-media-file-manager');
+        return $columns;
+    }
+
+    /**
+     * Display the File Size in the new column.
+     */
+    public function display_file_size_column($column_name, $post_id) {
+        if ('file_size' === $column_name) {
+            $file_path = get_attached_file($post_id);
+            $file_size = $file_path ? size_format(filesize($file_path)) : __('N/A', 'twgp-media-file-manager');
+            echo esc_html($file_size);
         }
     }
-}
-add_action( 'manage_media_custom_column', 'twg_display_file_size_column', 10, 2 );
 
-/**
- * Add the plugin's CSS to style the column if needed
- */
-function twg_media_file_size_column_style() {
-    // Only add styles if the user is in the media library
-    if ( isset( $_GET['post_type'] ) && 'attachment' === $_GET['post_type'] ) {
-        echo '<style>
-            .column-twg_file_size {
-                width: 100px;
-                text-align: center;
-            }
-        </style>';
+    /**
+     * Handle AJAX requests to get file size.
+     */
+    public function ajax_get_file_size() {
+        check_ajax_referer('twgp_nonce_action', 'security');
+
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error(__('Unauthorized access.', 'twgp-media-file-manager'));
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+        $file_path = get_attached_file($post_id);
+
+        if (!$file_path || !file_exists($file_path)) {
+            wp_send_json_error(__('File not found.', 'twgp-media-file-manager'));
+        }
+
+        $file_size = size_format(filesize($file_path));
+        wp_send_json_success(array('file_size' => $file_size));
     }
 }
-add_action( 'admin_head', 'twg_media_file_size_column_style' );
 
-/**
- * Enqueue scripts and styles for admin area securely
- */
-function twg_enqueue_admin_assets() {
-    // Ensure we're only loading assets in the admin area and for this plugin's page
-    if ( is_admin() ) {
-        wp_enqueue_style( 'twg-media-size-column-css', plugin_dir_url( __FILE__ ) . 'assets/admin-style.css', array(), '1.0' );
-    }
-}
-add_action( 'admin_enqueue_scripts', 'twg_enqueue_admin_assets' );
-
-/**
- * Ensure plugin data is sanitized and validated during plugin setup
- */
-function twg_plugin_setup() {
-    // Example: Sanitize plugin options (if you have any settings or options in the future)
-    if ( isset( $_POST['twg_example_option'] ) ) {
-        $safe_value = sanitize_text_field( $_POST['twg_example_option'] );
-        update_option( 'twg_example_option', $safe_value );
-    }
-}
-add_action( 'admin_init', 'twg_plugin_setup' );
+// Initialize the plugin.
+new TWGP_Media_File_Manager();
 
