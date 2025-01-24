@@ -8,6 +8,7 @@ License: GPL2
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Plugin URI: https://thewpguides.com/
 Author URI: https://thewpguides.com/
+Adds a column displaying the file size of media files in the WordPress media library.
 
 == Description ==
 
