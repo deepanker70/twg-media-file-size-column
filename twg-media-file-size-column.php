@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
-class TWGP_Media_File_Manager {
+class TWGP_Media_File_Size_Column {
     public function __construct() {
         // Hook into WordPress actions and filters.
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
@@ -98,5 +98,4 @@ class TWGP_Media_File_Manager {
 }
 
 // Initialize the plugin.
-new TWGP_Media_File_Manager();
-
+new TWGP_Media_File_Size_Column();
